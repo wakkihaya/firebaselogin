@@ -1,126 +1,107 @@
 <template>
-  <div class="hello">
-    <h1>{{ msg }}</h1>
-    <h2>Essential Links</h2>
-    <ul>
-      <li>
-        <a
-          href="https://vuejs.org"
-          target="_blank"
-        >
-          Core Docs
-        </a>
-      </li>
-      <li>
-        <a
-          href="https://forum.vuejs.org"
-          target="_blank"
-        >
-          Forum
-        </a>
-      </li>
-      <li>
-        <a
-          href="https://chat.vuejs.org"
-          target="_blank"
-        >
-          Community Chat
-        </a>
-      </li>
-      <li>
-        <a
-          href="https://twitter.com/vuejs"
-          target="_blank"
-        >
-          Twitter
-        </a>
-      </li>
-      <br>
-      <li>
-        <a
-          href="http://vuejs-templates.github.io/webpack/"
-          target="_blank"
-        >
-          Docs for This Template
-        </a>
-      </li>
-    </ul>
-    <h2>Ecosystem</h2>
-    <ul>
-      <li>
-        <a
-          href="http://router.vuejs.org/"
-          target="_blank"
-        >
-          vue-router
-        </a>
-      </li>
-      <li>
-        <a
-          href="http://vuex.vuejs.org/"
-          target="_blank"
-        >
-          vuex
-        </a>
-      </li>
-      <li>
-        <a
-          href="http://vue-loader.vuejs.org/"
-          target="_blank"
-        >
-          vue-loader
-        </a>
-      </li>
-      <li>
-        <a
-          href="https://github.com/vuejs/awesome-vue"
-          target="_blank"
-        >
-          awesome-vue
-        </a>
-      </li>
-    </ul>
-    <button @click="signOut">Sign out</button>
-  </div>
+ <div class="chat">
+   <header class = "header">
+    <h1>chat</h1>
+   <!--ここにchatの内容を書く-->
+    {{user.displayName}}
+
+   <button @click="signOut">Sign out</button>
+   </header>
+
+  <!--firebaseから取得したリストをtransitionを使って描画-->
+ <transition-group name ="chat" tag = "div" class = "list content">
+   <section v-for="{key,name,message} in chat" :key ="key" class="item">
+     <div class="item-detail">
+       <div class = "item-name">{{name}}</div>
+       <div class="item-message">
+        <nl2br tag ="div" :text ="message"/>
+       </div>
+     </div>
+   </section>
+ </transition-group>
+
+  <form action="" @submit.prevent="doSend" class ="form">
+    <textarea
+      v-model="input"
+      :disabled="!user.uid"
+      @keydown.enter.exact.prevent="doSend"></textarea>
+    <button type ="submit" :diabled="!user.uid" class="send-button">送信</button>
+
+  </form>
+ </div>
 </template>
 
 <script>
   import firebase from 'firebase'
 
+  import Nl2br from 'vue-nl2br'
+
 export default {
-  name: 'HelloWorld',
+  components:{Nl2br},
   data () {
     return {
-      msg: 'Welcome to Your Vue.js App',
-      name:firebase.auth().currentUser.email
+      user:{}, //ユーザー情報
+      chat:[], //取得したメッセージを入れる配列
+      input:'' //入力したメッセージ
     }
   },
+  created(){
+    firebase.auth().onAuthStateChanged(user=>{
+      this.user = user ? user :{}
+      const ref_message = firebase.database().ref('message')
+      if(user){
+        this.chat = []
+        ref_message.limitToLast(10).on('child_added',this.childAdded)
+      }else{
+        ref_message.limitToLast(10).off('child_added',this.childAdded)
+      }
+
+      }
+    )
+  },
+
   methods:{
     signOut:function () {
       firebase.auth().signOut().then(() =>{
         this.$router.push('/signin')
       })
 
+    },
+
+    scrollBottom(){
+      this.$nextTick(()=>{
+        window.scrollTo(0,document.body.clientHeight)
+      })
+    },
+    // 受け取ったメッセージをchatに追加
+    // データベースに新しい要素が追加されると随時呼び出される
+    childAdded(snap) {
+      const message = snap.val()
+      this.chat.push({
+        key: snap.key,
+        name: message.name,
+        image: message.image,
+        message: message.message
+      })
+      this.scrollBottom()
+    },
+
+    doSend(){
+      if(this.user.uid && this.input.length){
+        firebase.database().ref('message').push({
+          message:this.input,
+          name:this.user.displayName
+        },()=>{
+          this.input =''
+        })
+      }
     }
+
+
   }
 
 }
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-h1, h2 {
-  font-weight: normal;
-}
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-li {
-  display: inline-block;
-  margin: 0 10px;
-}
-a {
-  color: #42b983;
-}
-</style>
+<style src="./app.css"></style>
